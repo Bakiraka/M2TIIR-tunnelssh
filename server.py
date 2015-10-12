@@ -10,7 +10,7 @@ class MethodHandler(http.server.SimpleHTTPRequestHandler):
 
     def __init__(self,req,client_addr,server):
         http.server.SimpleHTTPRequestHandler.__init__(self,req,client_addr,server)
-'''
+        '''
     def do_GET(self):
         # Parse query data & params to find out what was passed
         parsedParams = urllib.parse.urlparse(self.path)
@@ -32,20 +32,27 @@ class MethodHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(bytes(DUMMY_RESPONSE, 'UTF-8'))
         return
-'''
+        '''
 
     def do_POST(self):
-        # Parse the form data posted
-        form = cgi.parse_multipart()
+        '''# Parse the form data posted
+        length = int(self.headers.getheader('content-length'))
+        data = self.rfile.read(length)
         print("##########################")
-        print(form)
-        print("##########################")
+        print(line)
+        print("##########################")'''
+
+        length = int(self.headers['Content-Length'])
+        post_data = urllib.parse.parse_qs(self.rfile.read(length).decode('utf-8'))
+        # You now have a dictionary of the post data
+        print("Sent : " + str(post_data))
 
         # Begin the response
         self.send_response(200)
-        self.send_header("Content-type", "text/html")
+        self.send_header("Content-type", "application/octet-stream")
         self.end_headers()
         self.wfile.write(bytes("Hello ! You did a POST !",'utf-8'))
+    #    self.wfile.write(bytes("You sent me : " + post_data,'utf-8'))
         return
 
 if __name__ == '__main__':
