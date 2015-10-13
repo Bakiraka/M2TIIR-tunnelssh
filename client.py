@@ -8,7 +8,7 @@ aenvoyer = sys.argv[1]
 data = bytes(aenvoyer, 'UTF-8')
 req = urllib.request.Request('http://localhost:8888', data)
 #req.add_header('Content-Length', '%d' % len(data))
-req.add_header('Content-Length', '%d' % len(data))
+req.add_header('Content-Length', len(data))
 req.add_header('Content-Type', 'application/octet-stream')
 
 try:
