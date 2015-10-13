@@ -2,7 +2,6 @@ import sys
 import urllib.parse
 import logging, cgi
 import http.server, socketserver, socket
-import threading
 
 class MethodHandler(http.server.BaseHTTPRequestHandler):
     CLOSE_SOCKET_MESSAGE = 'TO_CLOSE'
@@ -24,42 +23,62 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
         length = int(self.headers['Content-Length'])
         #Reading the POST content
         post_data = self.rfile.read(length).decode('utf-8')
+        self.returnEchoPOSTresponse(post_data)
+        return
         #DEBUG print("Sent : " + str(post_data))
 
-        if(post_data == MethodHandler.TRY_CONNECTION):
+    #    if(post_data == TRY_CONNECTION_MESSAGE):
             #test si le client SSH
-            pass
+    #        pass
 
-    def returnResponse(response):
+    def returnResponse(self, response):
         self.send_response(200)
         self.send_header("Content-type", "application/octet-stream")
         self.end_headers()
         self.wfile.write(bytes(response,'utf-8'))
+        return
 
     #Used for testing
-    def returnEchoPOSTresponse():
-        self.returnResponse(bytes("Hello ! You did a POST ! \nYou sent me : " + post_data,'utf-8'))
+    def returnEchoPOSTresponse(self, post_data):
+        self.returnResponse("Hello ! You did a POST ! \nYou sent me : " + post_data)
+        return
 
 if __name__ == '__main__':
     MAX_LENGTH = 4096
     HTTP_PORT = 8888
     SSHSERVER_PORT = 7777
     connected = False
-    socketToSSHClient = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    socketToSSHClient.bind(("localhost", SSHSERVER_PORT))
+    socketToSSHClient = socket.socket()
     socketToSSHClient.setblocking(0)
-    socketToSSHClient.listen(5)
-    #DEBUG print("DEBUG")
+#    socketToSSHClient.settimeout(None)
+    socketToSSHClient.bind(("localhost", 7777))
+    socketToSSHClient.listen(1)
 
-    while(True):
-        try:
-            (clientsocket, address) = socketToSSHClient.accept()
-            httpd = socketserver.TCPServer(("", HTTP_PORT), MethodHandler)
-        except OSError as bleme:
-            print("Error ! " + str(bleme))
-            sys.exit()
+    #while(True):
+    #while(connected == False):
+    try:
+        (clientsocket, address) = socketToSSHClient.accept()
+        connected == True
+    except OSError as bleme:
+#                print("Not connected")
+        print(str(bleme))
+        connected = False
+    print("DEBUG X")
 
-        httpd.handle_request()
+    try:
+        httpd = socketserver.TCPServer(("", HTTP_PORT), MethodHandler)
+    except OSError as bleme:
+        print("Error ! " + str(bleme))
+        sys.exit()
+    httpd.handle_request()
+    httpd.server_close()
 
+'''
     #print("Starting server at port " + str(HTTP_PORT) + ", use <Ctrl-C> to stop")
-    #httpd.serve_forever()
+    try:
+        httpd = socketserver.TCPServer(("", HTTP_PORT), MethodHandler)
+        httpd.serve_forever()
+    except OSError as bleme:
+        print("Error ! " + str(bleme))
+        sys.exit()
+'''
