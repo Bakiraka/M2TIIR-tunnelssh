@@ -43,28 +43,44 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
         self.returnResponse("Hello ! You did a POST ! \nYou sent me : " + post_data)
         return
 
+def readSocketClientSSH(socketToSSHClient):
+    socketToSSHClient.setblocking(False)
+
+    try:
+        data = socketToSSHClient.recv(2048)
+        print("Data received : " + str(data))
+    except OSError as bleme:
+#         print("Not connected")
+        print(str(bleme))
+        connected = False
+
 if __name__ == '__main__':
     MAX_LENGTH = 4096
     HTTP_PORT = 8888
     SSHSERVER_PORT = 7777
     connected = False
     socketToSSHClient = socket.socket()
-    socketToSSHClient.setblocking(0)
+    socketToSSHClient.setblocking(True)
 #    socketToSSHClient.settimeout(None)
     socketToSSHClient.bind(("localhost", 7777))
     socketToSSHClient.listen(1)
 
     #while(True):
-    #while(connected == False):
-    try:
-        (clientsocket, address) = socketToSSHClient.accept()
-        connected == True
-    except OSError as bleme:
-#                print("Not connected")
-        print(str(bleme))
-        connected = False
-    print("DEBUG X")
+    while(connected == False):
+        try:
+            (clientsocket, address) = socketToSSHClient.accept()
+            print('Connected with ' + address[0] + ':' + str(address[1]))
+            connected == True
+            clientsocket.setblocking(False)
+            readSocketClientSSH(clientsocket)
+        except OSError as bleme:
+    #         print("Not connected")
+            print(str(bleme))
+            connected = False
+        print("DEBUG X")
+        #socketToSSHClient.close()
 
+    '''
     try:
         httpd = socketserver.TCPServer(("", HTTP_PORT), MethodHandler)
     except OSError as bleme:
@@ -72,7 +88,7 @@ if __name__ == '__main__':
         sys.exit()
     httpd.handle_request()
     httpd.server_close()
-
+    '''
 '''
     #print("Starting server at port " + str(HTTP_PORT) + ", use <Ctrl-C> to stop")
     try:
