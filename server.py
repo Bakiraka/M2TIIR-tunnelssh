@@ -2,13 +2,14 @@ import sys
 import urllib.parse
 import logging, cgi
 import http.server, socketserver, socket
+import threading
 
 #Variables globales
 MAX_LENGTH = 4096
 HTTP_PORT = 8888
 SSHSERVER_PORT = 7777
-SSHClient_connected = None
-clientsocket = None
+SSHClient_IsConnected = None
+SSHclientSocket = None
 CLOSE_SOCKET_MESSAGE = 'TO_CLOSE'
 OPEN_SOCKET_MESSAGE = 'TO_OPEN'
 EMPTY_MESSAGE = 'BLANK'
@@ -16,7 +17,6 @@ TRY_CONNECTION_MESSAGE = 'TRY_CONNECTION'
 ASK_COMMAND_MESSAGE = 'WAITING_FOR_COMMAND'
 
 class MethodHandler(http.server.BaseHTTPRequestHandler):
-
     def __init__(self, req, client_addr, server):
         http.server.BaseHTTPRequestHandler.__init__(self,req,client_addr,server)
 
@@ -32,8 +32,8 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
         self.returnResponse(self.rfile.read(length).decode('utf-8'), "text/html")
 
     def do_POST(self):
-        global clientsocket
-        global SSHClient_connected
+        global SSHclientSocket
+        global SSHClient_IsConnected
         # Parse query data & params to find out what was passed
         try:
             length = int(self.headers['Content-Length'])
@@ -45,9 +45,9 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
         print("#######################################")
         print("Header \n" + str(self.headers))
         print("Sent : " + post_data.decode('utf-8'))
-        if(SSHClient_connected):
-            clientsocket.send(post_data)
-            sshdata = clientsocket.recv(1024)
+        if(SSHClient_IsConnected):
+            SSHclientSocket.send(post_data)
+            sshdata = SSHclientSocket.recv(1024)
             print("SSH client received :" + sshdata.decode())
             self.returnResponse(sshdata)
         else:
@@ -67,15 +67,25 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
         return
 
 def HTTPserverLoop(httpd):
-    
+    while(True):
+        httpd.handle_request()
+
+def SSHclientlistenerLoop(socketToSSHClient, ):
+    while(True):
+        if(SSHClient_IsConnected == False):
+            try:
+                print("Waiting for ssh client connexion...")
+                (SSHclientSocket, address) = socketToSSHClient.accept()
+            except OSError as problem:
+                print(str(problem))
+                SSHClient_IsConnected = False
+            print('SSHClient_IsConnected with ' + address[0] + ':' + str(address[1]))
+            SSHClient_IsConnected = True
 
 
 if __name__ == '__main__':
-    MAX_LENGTH = 4096
-    HTTP_PORT = 8888
-    SSHSERVER_PORT = 7777
-    SSHClient_connected
-    SSHClient_connected = False
+    #SSHClient_IsConnected
+    SSHClient_IsConnected = False
     socketToSSHClient = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         socketToSSHClient.bind(("localhost", SSHSERVER_PORT))
@@ -91,26 +101,18 @@ if __name__ == '__main__':
         print("Error ! " + str(problem))
         sys.exit()
 
-    print("Starting the tunnel server, use <Ctrl-C> to stop")
+    print("Tunnel server started, use <Ctrl-C> to stop")
+    print("The web server will handle requests at port : " + str(HTTP_PORT))
+    print("The SSH local server will listen to port :" + str(SSHSERVER_PORT))
+    SSHlistenerThread = threading.Thread(target=SSHclientlistenerLoop, args=(socketToSSHClient,))
+    HTTPserverThread = threading.Thread(target=HTTPserverLoop)
+
     try:
-        while(True):
-                if(SSHClient_connected == False):
-                    print("Waiting for ssh client connexion...")
-                    try:
-                        (clientsocket, address) = socketToSSHClient.accept()
-                    except OSError as problem:
-                        print(str(problem))
-                        SSHClient_connected = False
-                    print('SSHClient_connected with ' + address[0] + ':' + str(address[1]))
-                    SSHClient_connected = True
-                else:
-                    print("Web server, handling request at port " + str(HTTP_PORT)) #DEBUG
-                    httpd.handle_request()
 
     except KeyboardInterrupt:
         print("<Ctrl-C> Received, ending program.")
         httpd.server_close()
         socketToSSHClient.close()
-        if( clientsocket is not None):
-            clientsocket.close()
+        if( SSHclientSocket is not None):
+            SSHclientSocket.close()
         sys.exit()
