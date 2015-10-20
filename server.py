@@ -1,8 +1,7 @@
 import sys
 import urllib.parse
-import logging, cgi
 import http.server, socketserver, socket
-import threading
+import threading, time
 
 #Variables globales
 MAX_LENGTH = 4096
@@ -32,8 +31,6 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
         self.returnResponse(self.rfile.read(length).decode('utf-8'), "text/html")
 
     def do_POST(self):
-        global SSHclientSocket
-        global SSHClient_IsConnected
         # Parse query data & params to find out what was passed
         try:
             length = int(self.headers['Content-Length'])
@@ -45,9 +42,9 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
         print("#######################################")
         print("Header \n" + str(self.headers))
         print("Sent : " + post_data.decode('utf-8'))
-        if(SSHClient_IsConnected):
-            SSHclientSocket.send(post_data)
-            sshdata = SSHclientSocket.recv(1024)
+        if(self.server.SSHClient_IsConnected):
+            self.server.SSHclientSocket.send(post_data)
+            sshdata = self.server.SSHclientSocket.recv(1024)
             print("SSH client received :" + sshdata.decode())
             self.returnResponse(sshdata)
         else:
@@ -58,7 +55,7 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-type", type)
         self.end_headers()
-        self.wfile.write(bytes(response,'utf-8'))
+        self.wfile.write(response)
         return
 
     #Used for testing
@@ -66,12 +63,18 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
         self.returnResponse(("200 - You did a POST ! You sent me : " + post_data.decode('utf-8')), "text/html")
         return
 
-def HTTPserverLoop(httpd):
-    while(True):
+def HTTPserverLoop(httpd, run_event):
+    print("HTTPserverLoop Started.")
+
+    while(run_event.is_set()):
         httpd.handle_request()
 
-def SSHclientlistenerLoop(socketToSSHClient, ):
-    while(True):
+
+def SSHclientlistenerLoop(socketToSSHClient, run_event):
+    print("SSHclientlistenerLoop Started.")
+    global SSHClient_IsConnected
+
+    while(run_event.is_set()):
         if(SSHClient_IsConnected == False):
             try:
                 print("Waiting for ssh client connexion...")
@@ -84,19 +87,26 @@ def SSHclientlistenerLoop(socketToSSHClient, ):
 
 
 if __name__ == '__main__':
+    httpd = None
+    run_event = threading.Event()
+    run_event.set()
     #SSHClient_IsConnected
     SSHClient_IsConnected = False
+    SSHclientSocket = None
+    #SSH Socket server creation
     socketToSSHClient = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    #Tells to only listens to 1 client
+    socketToSSHClient.listen(1)
     try:
         socketToSSHClient.bind(("localhost", SSHSERVER_PORT))
-    except error:
+    except socket.error as e:
         print("Error : " + str(e))
-    #only listens to 1 client
-    socketToSSHClient.listen(1)
 
     #Creating the the HTTP daemon
     try:
         httpd = socketserver.TCPServer(("", HTTP_PORT), MethodHandler)
+        httpd.server.SSHClient_IsConnected = SSHClient_IsConnected
+        httpd.server.SSHclientSocket = SSHclientSocket
     except OSError as problem:
         print("Error ! " + str(problem))
         sys.exit()
@@ -104,15 +114,23 @@ if __name__ == '__main__':
     print("Tunnel server started, use <Ctrl-C> to stop")
     print("The web server will handle requests at port : " + str(HTTP_PORT))
     print("The SSH local server will listen to port :" + str(SSHSERVER_PORT))
-    SSHlistenerThread = threading.Thread(target=SSHclientlistenerLoop, args=(socketToSSHClient,))
-    HTTPserverThread = threading.Thread(target=HTTPserverLoop)
+    SSHlistenerThread = threading.Thread(target=SSHclientlistenerLoop, args=(socketToSSHClient, run_event))
+    HTTPserverThread = threading.Thread(target=HTTPserverLoop, args=(httpd,run_event))
 
     try:
-
+        SSHlistenerThread.start()
+        HTTPserverThread.start()
+        while 1:
+            time.sleep(.1)
     except KeyboardInterrupt:
         print("<Ctrl-C> Received, ending program.")
-        httpd.server_close()
-        socketToSSHClient.close()
+        run_event.clear()
+        SSHlistenerThread.join()
+        HTTPserverThread.join()
+        if(httpd is not None):
+            httpd.server_close()
+        if(socketToSSHClient is not None):
+            socketToSSHClient.close()
         if( SSHclientSocket is not None):
             SSHclientSocket.close()
         sys.exit()
