@@ -44,4 +44,3 @@ while True :
         print(toSend)
     except (BlockingIOError) as e :
         toSend = bytes(ASK_COMMAND_MESSAGE, 'UTF-8')
-    

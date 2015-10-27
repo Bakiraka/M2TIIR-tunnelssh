@@ -2,12 +2,14 @@ import sys
 import urllib.parse
 import http.server, socketserver, socket
 import threading, time
+import queue
 
 #Variables globales
 MAX_LENGTH = 4096
-HTTP_PORT = 8888
+HTTP_PORT = 8000
 SSHSERVER_PORT = 7777
 SSHClient_IsConnected = None
+dataQueue = queue.Queue()
 CLOSE_SOCKET_MESSAGE = 'TO_CLOSE'
 OPEN_SOCKET_MESSAGE = 'TO_OPEN'
 EMPTY_MESSAGE = 'BLANK'
@@ -41,14 +43,17 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
             return
         #Reading the POST content
         post_data = self.rfile.read(length)
-        print("#######################################")
-        print("Header \n" + str(self.headers))
-        print("Sent : " + post_data.decode('utf-8'))
+        print("#######################################")    #DEBUG
+        print("Header \n" + str(self.headers))              #DEBUG
+        print("Sent : " + post_data.decode('utf-8'))        #DEBUG
+        print("#######################################")    #DEBUG
+
         if(SSHClient_IsConnected):
-            self.SSHclientSocket.send(post_data)
-            sshdata = self.SSHclientSocket.recv(1024)
-            print("SSH client received :" + sshdata.decode())
-            self.returnResponse(sshdata)
+            if(post_data == ASK_COMMAND_MESSAGE):
+                if(dataQueue.empty() == False):
+                    self.returnResponse("202 ".encode() + dataQueue.get())
+            else:
+                self.SSHclientSocket.send(post_data)
         else:
             self.returnResponse(EMPTY_MESSAGE.encode())
         return
@@ -65,16 +70,15 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
         self.returnResponse(("200 - You did a POST ! You sent me : " + post_data.decode('utf-8')), "text/html")
         return
 
-def HTTPserverLoop(httpd, run_event):
+def HTTPserverLoop(httpd,run_event):
     print("HTTPserverLoop Started.")
-
     while(run_event.is_set()):
         httpd.serve_forever()
 
-
-def SSHclientlistenerLoop(socketToSSHClient, run_event):
+def SSHclientlistenerLoop(socketToSSHClient,run_event):
     print("SSHclientlistenerLoop Started.")
     global SSHClient_IsConnected
+    global dataQueue
 
     while(run_event.is_set()):
         if(SSHClient_IsConnected == False):
@@ -86,9 +90,13 @@ def SSHclientlistenerLoop(socketToSSHClient, run_event):
                 SSHClient_IsConnected = False
             print('SSHClient_IsConnected with ' + address[0] + ':' + str(address[1]))
             SSHClient_IsConnected = True
+        else:
+            sshdata = SSHclientSocket.recv(1024)
+            dataQueue.put(sshdata)
+            print("SSH client received :" + sshdata.decode())       #DEBUG
 
-def handleRequestsUsing(ssh_socket,isConnected):
-    return lambda *args: MethodHandler(ssh_socket,isConnected, *args)
+def handleRequestsUsing(ssh_socket):
+    return lambda *args: MethodHandler(ssh_socket, *args)
 
 if __name__ == '__main__':
     httpd = None
@@ -108,12 +116,12 @@ if __name__ == '__main__':
 
     #Creating the the HTTP daemon
     try:
-        handler = handleRequestsUsing(SSHclientSocket,SSHClient_IsConnected)
+        handler = handleRequestsUsing(SSHclientSocket)
         httpd = http.server.HTTPServer(("", HTTP_PORT), handler)
         httpd.SSHClient_IsConnected = SSHClient_IsConnected
         httpd.SSHclientSocket = SSHclientSocket
     except OSError as problem:
-        print("Error ! " + str(problem))
+        print("Error when creating the http daemon :" + str(problem))
         sys.exit()
 
     print("Tunnel server started, use <Ctrl-C> to stop")
@@ -127,7 +135,7 @@ if __name__ == '__main__':
         HTTPserverThread.start()
         while 1:
             time.sleep(.1)
-    #Proper closing by handling a Ctrl-C
+    #Proper closing by handling a Ctrl-C (Doesn't really work well but whatever)
     except KeyboardInterrupt:
         print("<Ctrl-C> Received, ending program.")
         run_event.clear()
@@ -138,9 +146,11 @@ if __name__ == '__main__':
             httpd.shutdown()
         if(socketToSSHClient is not None):
             if(SSHClient_IsConnected == False):
+                '''closingSocket = socket.socket()
+                closingSocket.connect(("localhost",SSHSERVER_PORT))
+                closingSocket.send("dummy".encode())
+                '''
                 socketToSSHClient.close()
-            else:
-                closingSocket = Socket
         if( SSHclientSocket is not None):
             SSHclientSocket.close()
         sys.exit()
