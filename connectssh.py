@@ -14,33 +14,52 @@ import sys
 import urllib.request
 import urllib.error
 import urllib.parse
-sock = socket.socket()
+from multiprocessing import Queue, Process
+def threadSSH(queueIn, queueOut):
+    toReceive = None
+    tmp = None
+    sock = socket.socket()
+    sock.connect((ADDRESS_SSHD,PORT_SSHD))
+    sock.setblocking(False)
+    while True : 
+        if not(queueIn.empty()) or tmp != None :
+            #try :
+                if (tmp != None) :
+                    tmp = queueIn.get()
+                sock.send(tmp)
+                tmp = None
+            #except BlockingIOError as e :
+                
+        try :
+            toReceive = sock.recv(MAX_LENGTH)
+        except BlockingIOError as e :
+            print ("error")
+            toReceive = None
+        if toReceive != None:
+            queueOut.put(toSend)
+            
 content = ''
 toSend = bytes(ASK_COMMAND_MESSAGE, 'UTF-8')
 data = toSend
-while True :
-    data = toSend
-    req = urllib.request.Request('http://'+ADDRESS_SERVER+':'+PORT_SERVER, data)
-    req.add_header('Content-Length', len(data))
-    req.add_header('Content-Type', 'application/octet-stream')
-    try :
-        res = urllib.request.urlopen(req)
-        content = res.read()
-    except (urllib.error.HTTPError, urllib.error.URLError) as e :
-        continue
-    if closed == True :
-        closed = False
-        sock.connect((ADDRESS_SSHD,PORT_SSHD))
-        sock.setblocking(False)
-    # si le message demande qu'on close la socket, on le fait, et on redemande la connection au serveur
-    if str(content) == CLOSE_SOCKET_MESSAGE :
-        sock.close()
-        closed = True
-    # si le message n'est pas un message d'attente, on envoie la commande ssh, puis on recoit les données qu'on envoie
-    if str(content) != EMPTY_MESSAGE :
-        sock.send(content)
-    try :
-        toSend = sock.recv(MAX_LENGTH)
-        print(toSend)
-    except (BlockingIOError) as e :
-        toSend = bytes(ASK_COMMAND_MESSAGE, 'UTF-8')
+if __name__== '__main__':
+    q = Queue()
+    qo = Queue()
+    p = Process(target=threadSSH, args=(q,qo,))
+    p.start()
+    while True :
+        data = toSend
+        req = urllib.request.Request('http://'+ADDRESS_SERVER+':'+PORT_SERVER, data)
+        req.add_header('Content-Length', len(data))
+        req.add_header('Content-Type', 'application/octet-stream')
+        try :
+            res = urllib.request.urlopen(req)
+            content = res.read()
+        except (urllib.error.HTTPError, urllib.error.URLError) as e :
+            continue
+        if str(content) != EMPTY_MESSAGE :
+            q.put(content)
+        if qo.empty() :
+            toSend = bytes(ASK_COMMAND_MESSAGE)
+        else :
+            toSend = bytes(qo.get())
+    
