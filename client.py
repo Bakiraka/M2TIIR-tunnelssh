@@ -4,7 +4,6 @@ import sys
 
 
 aenvoyer = sys.argv[1]
-
 data = bytes(aenvoyer, 'UTF-8')
 req = urllib.request.Request('http://localhost:8000', data)
 #req.add_header('Content-Length', '%d' % len(data))

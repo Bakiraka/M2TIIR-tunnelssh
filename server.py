@@ -32,7 +32,7 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
             self.returnResponse("411 - Length Required", "text/html")
             return
         data_received = self.rfile.read(length)
-        if(data_received[0:3] == "test"):
+        if("test" in data_received[:4]):
             self.returnResponse("Test, OK.".encode())
         self.returnResponse(self.rfile.read(length).decode('utf-8'), "text/html")
 
@@ -121,8 +121,6 @@ if __name__ == '__main__':
     try:
         handler = handleRequestsUsing(SSHclientSocket)
         httpd = http.server.HTTPServer(("", HTTP_PORT), handler)
-        httpd.SSHClient_IsConnected = SSHClient_IsConnected
-        httpd.SSHclientSocket = SSHclientSocket
     except OSError as problem:
         print("Error when creating the http daemon :" + str(problem))
         sys.exit()
@@ -148,12 +146,8 @@ if __name__ == '__main__':
         if(httpd is not None):
             httpd.shutdown()
         if(socketToSSHClient is not None):
-            if(SSHClient_IsConnected == False):
-                '''closingSocket = socket.socket()
-                closingSocket.connect(("localhost",SSHSERVER_PORT))
-                closingSocket.send("dummy".encode())
-                '''
-                socketToSSHClient.close()
-        if( SSHclientSocket is not None):
-            SSHclientSocket.close()
+            closingSocket = socket.socket()
+            closingSocket.connect(("localhost",SSHSERVER_PORT))
+            closingSocket.send("dummy".encode())
+            socketToSSHClient.close()
         sys.exit()
