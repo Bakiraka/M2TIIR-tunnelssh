@@ -31,6 +31,9 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
         except TypeError:
             self.returnResponse("411 - Length Required", "text/html")
             return
+        data_received = self.rfile.read(length)
+        if(data_received[0:3] == "test"):
+            self.returnResponse("Test, OK.".encode())
         self.returnResponse(self.rfile.read(length).decode('utf-8'), "text/html")
 
     def do_POST(self):

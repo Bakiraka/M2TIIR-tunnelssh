@@ -21,7 +21,7 @@ def threadSSH(queueIn, queueOut):
     sock = socket.socket()
     sock.connect((ADDRESS_SSHD,PORT_SSHD))
     sock.setblocking(False)
-    while True : 
+    while True :
         if not(queueIn.empty()) or tmp != None :
             #try :
                 if (tmp != None) :
@@ -29,7 +29,7 @@ def threadSSH(queueIn, queueOut):
                 sock.send(tmp)
                 tmp = None
             #except BlockingIOError as e :
-                
+
         try :
             toReceive = sock.recv(MAX_LENGTH)
         except BlockingIOError as e :
@@ -37,7 +37,7 @@ def threadSSH(queueIn, queueOut):
             toReceive = None
         if toReceive != None:
             queueOut.put(toSend)
-            
+
 content = ''
 toSend = bytes(ASK_COMMAND_MESSAGE, 'UTF-8')
 data = toSend
@@ -50,6 +50,7 @@ if __name__== '__main__':
         data = toSend
         req = urllib.request.Request('http://'+ADDRESS_SERVER+':'+PORT_SERVER, data)
         req.add_header('Content-Length', len(data))
+        req.add_header('User-Agent', 'Mozilla/5.0 (X11; Linux x86_64; rv:38.0) Gecko/20100101 Firefox/38.0 Iceweasel/38.3.0')
         req.add_header('Content-Type', 'application/octet-stream')
         try :
             res = urllib.request.urlopen(req)
@@ -62,4 +63,3 @@ if __name__== '__main__':
             toSend = bytes(ASK_COMMAND_MESSAGE)
         else :
             toSend = bytes(qo.get())
-    
