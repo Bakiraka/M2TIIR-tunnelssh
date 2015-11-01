@@ -4,21 +4,18 @@ import http.server, socketserver, socket
 import threading, time
 import queue
 
-#Variables globales
+#Default Values
+EMPTY_MESSAGE = b'BLANK'
+ASK_COMMAND_MESSAGE = 'WAITING_FOR_COMMAND'
 MAX_LENGTH = 4096
 HTTP_PORT = 8000
 SSHSERVER_PORT = 7777
 SSHClient_IsConnected = None
-dataQueue = queue.Queue()
-CLOSE_SOCKET_MESSAGE = 'TO_CLOSE'
-OPEN_SOCKET_MESSAGE = 'TO_OPEN'
-EMPTY_MESSAGE = 'BLANK'
-TRY_CONNECTION_MESSAGE = 'TRY_CONNECTION'
-ASK_COMMAND_MESSAGE = 'WAITING_FOR_COMMAND'
+dataToSSHQueue = queue.Queue()
+dataFromSSHQueue = queue.Queue()
 
 class MethodHandler(http.server.BaseHTTPRequestHandler):
-    def __init__(self,ssh_socket,*args):
-        self.SSHclientSocket=ssh_socket
+    def __init__(self,*args):#######################
         http.server.BaseHTTPRequestHandler.__init__(self,*args)
         print("init!") #DEBUG
 
@@ -29,12 +26,9 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
         try:
             length = int(self.headers['Content-Length'])
         except TypeError:
-            self.returnResponse("411 - Length Required", "text/html")
+            self.returnOKResponse("411 - Length Required", "text/html")
             return
-        data_received = self.rfile.read(length)
-        if("test" in data_received[:4]):
-            self.returnResponse("Test, OK.".encode())
-        self.returnResponse(self.rfile.read(length).decode('utf-8'), "text/html")
+        self.returnOKResponse(self.rfile.read(length).decode(), "text/html")
 
     def do_POST(self):
         global SSHClient_IsConnected
@@ -42,41 +36,45 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
         try:
             length = int(self.headers['Content-Length'])
         except TypeError:
-            self.returnResponse("411 - Length Required", "text/html")
+            self.send_response(411)
+            self.send_header("Content-type", type)
+            self.end_headers()
+            self.wfile.write("Length Required")
             return
         #Reading the POST content
         post_data = self.rfile.read(length)
         print("#######################################")    #DEBUG
         print("Header \n" + str(self.headers))              #DEBUG
-        print("Sent : " + post_data.decode('utf-8'))        #DEBUG
+        print("Sent : |" + post_data.decode() + "|")        #DEBUG
         print("#######################################")    #DEBUG
 
         if(SSHClient_IsConnected):
             if(post_data == ASK_COMMAND_MESSAGE):
-                if(dataQueue.empty() == False):
-                    self.returnResponse("202 ".encode() + dataQueue.get())
+                print("###### Is ASK_COMMAND_MESSAGE")
+                if(dataFromSSHQueue.empty() == False):
+                    self.returnOKResponse(dataFromSSHQueue.get())
             else:
-                self.SSHclientSocket.send(post_data)
+                dataToSSHQueue.put(post_data)
         else:
-            self.returnResponse(EMPTY_MESSAGE.encode())
+            self.returnOKResponse(EMPTY_MESSAGE)
         return
 
-    def returnResponse(self, response, type="application/octet-stream"):
+    def returnOKResponse(self, response, type="application/octet-stream"):
         self.send_response(200)
         self.send_header("Content-type", type)
+        self.send_header("Content-Length", len(response))
         self.end_headers()
         self.wfile.write(response)
         return
 
     #Used for testing
     def returnEchoPOSTresponse(self, post_data):
-        self.returnResponse(("200 - You did a POST ! You sent me : " + post_data.decode('utf-8')), "text/html")
+        self.returnOKResponse(("You did a POST ! You sent me : " + post_data.decode()), "text/html")
         return
 
 def HTTPserverLoop(httpd,run_event):
     print("HTTPserverLoop Started.")
-    while(run_event.is_set()):
-        httpd.serve_forever()
+    httpd.serve_forever()
 
 def SSHclientlistenerLoop(socketToSSHClient,run_event):
     print("SSHclientlistenerLoop Started.")
@@ -84,6 +82,7 @@ def SSHclientlistenerLoop(socketToSSHClient,run_event):
     global dataQueue
 
     while(run_event.is_set()):
+        time.sleep(.5)
         if(SSHClient_IsConnected == False):
             try:
                 print("Waiting for ssh client connexion...")
@@ -93,15 +92,33 @@ def SSHclientlistenerLoop(socketToSSHClient,run_event):
                 SSHClient_IsConnected = False
             print('SSHClient_IsConnected with ' + address[0] + ':' + str(address[1]))
             SSHClient_IsConnected = True
-        else:
-            sshdata = SSHclientSocket.recv(1024)
-            dataQueue.put(sshdata)
+            ToSSHThread = threading.Thread(target=DataToSSHclientLoop, args=(SSHclientSocket, run_event))
+            FromSSHThread = threading.Thread(target=DataFromSSHclientLoop, args=(SSHclientSocket, run_event))
+            ToSSHThread.start()
+            FromSSHThread.start()
+
+
+def DataToSSHclientLoop(SSHclientSocket, run_event):
+    while(run_event.is_set()):
+        if(SSHClient_IsConnected == True):
+            if(dataToSSHQueue.empty() == False):
+                data = dataToSSHQueue.get()
+                SSHclientSocket.send(data)
+
+def DataFromSSHclientLoop(SSHclientSocket, run_event):
+    while(run_event.is_set()):
+        if(SSHClient_IsConnected == True):
+            sshdata = SSHclientSocket.recv(2048)
+            dataFromSSHQueue.put(sshdata)
             print("SSH client received :" + sshdata.decode())       #DEBUG
 
-def handleRequestsUsing(ssh_socket):
-    return lambda *args: MethodHandler(ssh_socket, *args)
-
 if __name__ == '__main__':
+    #Processing the arguments
+    if(len(sys.argv) > 1):
+        HTTP_PORT=int(sys.argv[1])
+        if(len(sys.argv) > 2):
+            SSHSERVER_PORT=int(sys.argv[2])
+
     httpd = None
     run_event = threading.Event()
     run_event.set()
@@ -119,8 +136,9 @@ if __name__ == '__main__':
 
     #Creating the the HTTP daemon
     try:
-        handler = handleRequestsUsing(SSHclientSocket)
-        httpd = http.server.HTTPServer(("", HTTP_PORT), handler)
+        httpd = http.server.HTTPServer(("", HTTP_PORT), MethodHandler)
+        httpd.SSHClient_IsConnected = SSHClient_IsConnected
+        httpd.SSHclientSocket = SSHclientSocket
     except OSError as problem:
         print("Error when creating the http daemon :" + str(problem))
         sys.exit()
@@ -146,8 +164,12 @@ if __name__ == '__main__':
         if(httpd is not None):
             httpd.shutdown()
         if(socketToSSHClient is not None):
-            closingSocket = socket.socket()
-            closingSocket.connect(("localhost",SSHSERVER_PORT))
-            closingSocket.send("dummy".encode())
-            socketToSSHClient.close()
+            if(SSHClient_IsConnected == False):
+                '''closingSocket = socket.socket()
+                closingSocket.connect(("localhost",SSHSERVER_PORT))
+                closingSocket.send("dummy".encode())
+                '''
+                socketToSSHClient.close()
+        if( SSHclientSocket is not None):
+            SSHclientSocket.close()
         sys.exit()
