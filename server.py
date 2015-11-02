@@ -6,7 +6,7 @@ import queue
 
 #Default Values
 EMPTY_MESSAGE = b'BLANK'
-ASK_COMMAND_MESSAGE = 'WAITING_FOR_COMMAND'
+ASK_COMMAND_MESSAGE = b'WAITING_FOR_COMMAND'
 MAX_LENGTH = 2048
 HTTP_PORT = 8000
 SSHSERVER_PORT = 7777
@@ -53,6 +53,8 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
 
             if(dataFromSSHQueue.empty() == False):
                 self.returnOKResponse(dataFromSSHQueue.get())
+            else:
+                self.returnOKResponse(ASK_COMMAND_MESSAGE)
         else:
             self.returnOKResponse(EMPTY_MESSAGE)
         return
