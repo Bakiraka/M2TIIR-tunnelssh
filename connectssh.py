@@ -9,39 +9,44 @@ import queue
 EMPTY_MESSAGE = 'BLANK'
 ASK_COMMAND_MESSAGE = 'WAITING_FOR_COMMAND'
 PORT_SSHD = 22
-MAX_LENGTH = 4096
+MAX_LENGTH = 2048
 ADDRESS_SSHD = "localhost"
 ADDRESS_SERVER = "localhost"
 PORT_SERVER = "7777"
 
 def threadSSH(queueIn, queueOut, run_event):
-    toReceive = None
-    tmp = None
     sock = socket.socket()
     try:
         sock.connect((ADDRESS_SSHD,PORT_SSHD))
-        sock.setblocking(False)
+        #sock.setblocking(False)
     except ConnectionRefusedError as e:
         print("Connection error : " + str(e))
         print("Exiting...")
         run_event.clear()
 
+    ToSSHThread = threading.Thread(target=DataToSSHserverLoop, args=(sock,queueIn,run_event))
+    FromSSHThread = threading.Thread(target=DataFromSSHserverLoop, args=(sock,queueOut,run_event))
+    ToSSHThread.start()
+    FromSSHThread.start()
     while(run_event.is_set()):
-        time.sleep(0.1)
-        if not(queueIn.empty()) or tmp != None :
-            if (tmp != None) :
+        time.sleep(.2)
+
+def DataToSSHserverLoop(SSHserverSocket,queueIn,run_event):
+    tmp = None
+    while(run_event.is_set()):
+        if not(queueIn.empty()):
+            if (tmp != None):
                 tmp = queueIn.get()
-            sock.send(tmp)
+                SSHserverSocket.send(tmp)
             tmp = None
 
-        try :
-            toReceive = sock.recv(MAX_LENGTH)
-        except BlockingIOError as e :
-            print ("Blocking Error :" + str(e))
-            toReceive = None
-        if toReceive != None:
+def DataFromSSHserverLoop(SSHserverSocket,queueOut,run_event):
+    toReceive = None
+    while(run_event.is_set()):
+        toReceive = SSHserverSocket.recv(MAX_LENGTH)
+        if(toReceive != None):
             queueOut.put(toReceive)
-
+        toReceive = None
 
 if __name__== '__main__':
     #Processing the arguments
@@ -51,7 +56,7 @@ if __name__== '__main__':
             PORT_SERVER=sys.argv[2]
 
     content = ''
-    #Thread Synchronisation element
+    #Thread synchronisation element
     run_event = threading.Event()
     run_event.set()
 
@@ -65,29 +70,34 @@ if __name__== '__main__':
         try:
             time.sleep(2) ############## DEBUG
             data = toSend
+            print("Sending : |" + data.decode() + '|')
             req = urllib.request.Request('http://'+ADDRESS_SERVER+':'+PORT_SERVER, data)
             req.add_header('Content-Length', len(data))
             req.add_header('User-Agent', 'Mozilla/5.0 (X11; Linux x86_64; rv:38.0) Gecko/20100101 Firefox/38.0 Iceweasel/38.3.0')
             req.add_header('Content-Type', 'application/octet-stream')
             try :
-                print("openning : " + req.get_full_url())
+                print("Openning : " + req.get_full_url())
                 try:
                     res = urllib.request.urlopen(req)
-                    content = res.read().decode('UTF-8')
-                    print("Received : " + content)
+                    content = res.read()
+                    print("Received : |" + content.decode() + '|')
                 except http.client.BadStatusLine as e:
-                    print("Error : " + str(e))
-                #content = res.read().decode('UTF-8')
+                    print("BadStatusLine Error : " + str(e))
             except (urllib.error.HTTPError, urllib.error.URLError) as e :
+                print("urllib error : " + str(e))
                 continue
-            if str(content) != EMPTY_MESSAGE :
+
+            if str(content.decode()) != EMPTY_MESSAGE :
                 q.put(content)
+
             if qo.empty() :
                 toSend = ASK_COMMAND_MESSAGE.encode()
-            else :
+            else:
                 toSend = qo.get()
 
         except KeyboardInterrupt:
             print("<Ctrl-C> Received, ending program.")
-            processSSH.terminate()
+            run_event.clear()
+            time.sleep(1)
+            processSSH.join()
             sys.exit()

@@ -7,7 +7,7 @@ import queue
 #Default Values
 EMPTY_MESSAGE = b'BLANK'
 ASK_COMMAND_MESSAGE = 'WAITING_FOR_COMMAND'
-MAX_LENGTH = 4096
+MAX_LENGTH = 2048
 HTTP_PORT = 8000
 SSHSERVER_PORT = 7777
 SSHClient_IsConnected = None
@@ -26,7 +26,7 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
         try:
             length = int(self.headers['Content-Length'])
         except TypeError:
-            self.returnOKResponse("411 - Length Required", "text/html")
+            self.returnTypeErrorResponse("Length Required")
             return
         self.returnOKResponse(self.rfile.read(length).decode(), "text/html")
 
@@ -36,27 +36,33 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
         try:
             length = int(self.headers['Content-Length'])
         except TypeError:
-            self.send_response(411)
-            self.send_header("Content-type", type)
-            self.end_headers()
-            self.wfile.write("Length Required")
+            self.returnTypeErrorResponse("Length Required")
             return
         #Reading the POST content
         post_data = self.rfile.read(length)
         print("#######################################")    #DEBUG
         print("Header \n" + str(self.headers))              #DEBUG
-        print("Sent : |" + post_data.decode() + "|")        #DEBUG
+        print("Received : |" + post_data.decode() + "|")    #DEBUG
         print("#######################################")    #DEBUG
 
         if(SSHClient_IsConnected):
             if(post_data == ASK_COMMAND_MESSAGE):
                 print("###### Is ASK_COMMAND_MESSAGE")
-                if(dataFromSSHQueue.empty() == False):
-                    self.returnOKResponse(dataFromSSHQueue.get())
             else:
                 dataToSSHQueue.put(post_data)
+
+            if(dataFromSSHQueue.empty() == False):
+                self.returnOKResponse(dataFromSSHQueue.get())
         else:
             self.returnOKResponse(EMPTY_MESSAGE)
+        return
+
+    def returnTypeErrorResponse(self, response):
+        self.send_response(411)
+        self.send_header("Content-type", "text/html")
+        self.send_header("Content-Length", len(response))
+        self.end_headers()
+        self.wfile.write(response)
         return
 
     def returnOKResponse(self, response, type="application/octet-stream"):
@@ -76,10 +82,15 @@ def HTTPserverLoop(httpd,run_event):
     print("HTTPserverLoop Started.")
     httpd.serve_forever()
 
+def ClearQueue(queueToClear):
+    while(queueToClear.empty()==False):
+        nall = queueToClear.get()
+
 def SSHclientlistenerLoop(socketToSSHClient,run_event):
     print("SSHclientlistenerLoop Started.")
     global SSHClient_IsConnected
     global dataQueue
+    SSHclientThreadsEvent = threading.Event()
 
     while(run_event.is_set()):
         time.sleep(.5)
@@ -88,29 +99,40 @@ def SSHclientlistenerLoop(socketToSSHClient,run_event):
                 print("Waiting for ssh client connexion...")
                 (SSHclientSocket, address) = socketToSSHClient.accept()
             except OSError as problem:
-                print(str(problem))
+                print("Error at" + str(problem))
                 SSHClient_IsConnected = False
             print('SSHClient_IsConnected with ' + address[0] + ':' + str(address[1]))
             SSHClient_IsConnected = True
-            ToSSHThread = threading.Thread(target=DataToSSHclientLoop, args=(SSHclientSocket, run_event))
-            FromSSHThread = threading.Thread(target=DataFromSSHclientLoop, args=(SSHclientSocket, run_event))
+            SSHclientThreadsEvent.set()
+            ClearQueue(dataToSSHQueue)
+            ClearQueue(dataFromSSHQueue)
+            ToSSHThread = threading.Thread(target=DataToSSHclientLoop, args=(SSHclientSocket, SSHclientThreadsEvent))
+            FromSSHThread = threading.Thread(target=DataFromSSHclientLoop, args=(SSHclientSocket, SSHclientThreadsEvent))
             ToSSHThread.start()
             FromSSHThread.start()
 
+    if(run_event.is_set() == False):
+        SSHclientThreadsEvent.clear()
 
-def DataToSSHclientLoop(SSHclientSocket, run_event):
-    while(run_event.is_set()):
+def DataToSSHclientLoop(SSHclientSocket, SSHclientThreadsEvent):
+    while(SSHclientThreadsEvent.is_set()):
         if(SSHClient_IsConnected == True):
             if(dataToSSHQueue.empty() == False):
                 data = dataToSSHQueue.get()
                 SSHclientSocket.send(data)
 
-def DataFromSSHclientLoop(SSHclientSocket, run_event):
-    while(run_event.is_set()):
+def DataFromSSHclientLoop(SSHclientSocket, SSHclientThreadsEvent):
+    global SSHClient_IsConnected
+    while(SSHclientThreadsEvent.is_set()):
         if(SSHClient_IsConnected == True):
-            sshdata = SSHclientSocket.recv(2048)
-            dataFromSSHQueue.put(sshdata)
-            print("SSH client received :" + sshdata.decode())       #DEBUG
+            sshdata = SSHclientSocket.recv(MAX_LENGTH)
+            if(sshdata == b''):
+                print("Socket connection broken")
+                SSHClient_IsConnected = False
+                SSHclientThreadsEvent.clear()
+            else:
+                dataFromSSHQueue.put(sshdata)
+                print("SSH client received : |" + sshdata.decode() + '|')       #DEBUG
 
 if __name__ == '__main__':
     #Processing the arguments
@@ -153,7 +175,7 @@ if __name__ == '__main__':
         SSHlistenerThread.start()
         HTTPserverThread.start()
         while 1:
-            time.sleep(.1)
+            time.sleep(.2)
     #Proper closing by handling a Ctrl-C (Doesn't really work well but whatever)
     except KeyboardInterrupt:
         print("<Ctrl-C> Received, ending program.")
