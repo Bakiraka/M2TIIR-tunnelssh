@@ -10,6 +10,7 @@ ASK_COMMAND_MESSAGE = b'WAITING_FOR_COMMAND'
 MAX_LENGTH = 2048
 HTTP_PORT = 8000
 SSHSERVER_PORT = 7777
+REFRESH_RATE = 0.01
 SSHClient_IsConnected = None
 dataToSSHQueue = queue.Queue()
 dataFromSSHQueue = queue.Queue()
@@ -97,7 +98,7 @@ def SSHclientlistenerLoop(socketToSSHClient,run_event):
     SSHclientThreadsEvent = threading.Event()
 
     while(run_event.is_set()):
-        time.sleep(.3)
+        time.sleep(REFRESH_RATE * 30)
         if(SSHClient_IsConnected == False):
             try:
                 print("Waiting for ssh client connexion...")
@@ -120,7 +121,7 @@ def SSHclientlistenerLoop(socketToSSHClient,run_event):
 
 def DataToSSHclientLoop(SSHclientSocket, SSHclientThreadsEvent):
     while(SSHclientThreadsEvent.is_set()):
-        time.sleep(0.1)
+        time.sleep(REFRESH_RATE)
         if(SSHClient_IsConnected == True):
             if(dataToSSHQueue.empty() == False):
                 data = dataToSSHQueue.get()
@@ -129,7 +130,7 @@ def DataToSSHclientLoop(SSHclientSocket, SSHclientThreadsEvent):
 def DataFromSSHclientLoop(SSHclientSocket, SSHclientThreadsEvent):
     global SSHClient_IsConnected
     while(SSHclientThreadsEvent.is_set()):
-        time.sleep(0.1)
+        time.sleep(REFRESH_RATE)
         if(SSHClient_IsConnected == True):
             sshdata = SSHclientSocket.recv(MAX_LENGTH)
             if(sshdata == b''):
@@ -145,8 +146,18 @@ if __name__ == '__main__':
     if(len(sys.argv) > 1):
         HTTP_PORT=int(sys.argv[1])
         if(len(sys.argv) > 2):
-            SSHSERVER_PORT=int(sys.argv[2])
-
+            try:
+                SSHSERVER_PORT=int(sys.argv[2])
+            except ValueError as error:
+                print("Problem with the second argument : " + str(error))
+                print("Default value for SSHSERVER_PORT set to {}".format(7777))
+                SSHSERVER_PORT = 7777
+            if(len(sys.argv) > 3):
+                try:
+                    REFRESH_RATE = 0.01 * int(sys.argv[3])
+                except ValueError as error:
+                    print("Problem with the thrid argument : " + str(error))
+                    print("Default value for REFRESH_RATE set to {}".format(REFRESH_RATE))
     httpd = None
     run_event = threading.Event()
     run_event.set()
@@ -180,15 +191,13 @@ if __name__ == '__main__':
     try:
         SSHlistenerThread.start()
         HTTPserverThread.start()
-        while 1:
+        while(run_event.is_set()):
             time.sleep(.2)
     #Proper closing by handling a Ctrl-C (Doesn't really work well but whatever)
     except KeyboardInterrupt:
         print("<Ctrl-C> Received, ending program.")
         run_event.clear()
         httpd.shutdown()
-        SSHlistenerThread.join(2.0)
-        HTTPserverThread.join(2.0)
         if(httpd is not None):
             httpd.shutdown()
         if(socketToSSHClient is not None):
@@ -199,4 +208,6 @@ if __name__ == '__main__':
                 socketToSSHClient.close()
         if( SSHclientSocket is not None):
             SSHclientSocket.close()
+        SSHlistenerThread.join(.2)
+        HTTPserverThread.join(.2)
         sys.exit()
