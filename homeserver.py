@@ -144,20 +144,20 @@ def DataFromSSHclientLoop(SSHclientSocket, SSHclientThreadsEvent):
 if __name__ == '__main__':
     #Processing the arguments
     if(len(sys.argv) > 1):
-        HTTP_PORT=int(sys.argv[1])
+        try:
+            REFRESH_RATE = 0.01 * int(sys.argv[1])
+        except ValueError as error:
+            print("Problem with the first argument : " + str(error))
+            print("Default value for REFRESH_RATE set to {}".format(REFRESH_RATE))
         if(len(sys.argv) > 2):
-            try:
-                SSHSERVER_PORT=int(sys.argv[2])
-            except ValueError as error:
-                print("Problem with the second argument : " + str(error))
-                print("Default value for SSHSERVER_PORT set to {}".format(7777))
-                SSHSERVER_PORT = 7777
+            HTTP_PORT=int(sys.argv[2])
             if(len(sys.argv) > 3):
                 try:
-                    REFRESH_RATE = 0.01 * int(sys.argv[3])
+                    SSHSERVER_PORT=int(sys.argv[3])
                 except ValueError as error:
-                    print("Problem with the thrid argument : " + str(error))
-                    print("Default value for REFRESH_RATE set to {}".format(REFRESH_RATE))
+                    print("Problem with the second argument : " + str(error))
+                    print("Default value for SSHSERVER_PORT set to {}".format(7777))
+                    SSHSERVER_PORT = 7777
     httpd = None
     run_event = threading.Event()
     run_event.set()

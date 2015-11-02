@@ -54,21 +54,20 @@ def DataFromSSHserverLoop(SSHserverSocket,queueOut,run_event):
 if __name__== '__main__':
     #Processing the arguments
     if(len(sys.argv) > 1):
-        ADDRESS_SERVER = sys.argv[1]
+        try:
+            REFRESH_RATE = 0.01 * int(sys.argv[1])
+        except ValueError as error:
+            print("Problem with the first argument : " + str(error))
+            print("Default value for REFRESH_RATE set to {}".format(REFRESH_RATE))
         if(len(sys.argv) > 2):
-            try:
-                PORT_SERVER=int(sys.argv[2])
-            except ValueError as error:
-                print("Problem with the second argument : " + str(error))
-                print("Default value for HTTP PORT set to 8000")
-                PORT_SERVER = 8000
+            ADDRESS_SERVER = sys.argv[2]
             if(len(sys.argv) > 3):
                 try:
-                    REFRESH_RATE = 0.01 * int(sys.argv[3])
+                    PORT_SERVER=int(sys.argv[3])
                 except ValueError as error:
-                    print("Problem with the thrid argument : " + str(error))
-                    print("Default value for REFRESH_RATE set to {}".format(REFRESH_RATE))
-
+                    print("Problem with the third argument : " + str(error))
+                    print("Default value for HTTP PORT set to 8000")
+                    PORT_SERVER = 8000
 
     content = b''
     toSend = ASK_COMMAND_MESSAGE
@@ -89,8 +88,8 @@ if __name__== '__main__':
             req.add_header('User-Agent', 'Mozilla/5.0 (X11; Linux x86_64; rv:38.0) Gecko/20100101 Firefox/38.0 Iceweasel/38.3.0')
             req.add_header('Content-Type', 'application/octet-stream')
 
-            print("Openning : " + req.get_full_url())
-            if((toSend != ASK_COMMAND_MESSAGE) and (toSend != EMPTY_MESSAGE)): #DEBUG
+            #DEBUG print("Openning : " + req.get_full_url())
+            if((toSend != ASK_COMMAND_MESSAGE) and (toSend != EMPTY_MESSAGE) and content != b''): #DEBUG
                 print("Sending to HTTP server : |" + str(toSend) + '|') #DEBUG
             try:
                 res = urllib.request.urlopen(req)
