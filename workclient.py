@@ -54,7 +54,7 @@ def DataFromSSHserverLoop(SSHserverSocket,queueOut,run_event):
 
 if __name__== '__main__':
     #Processing the arguments
-    password = "pass"
+    password = 0x05
     if(len(sys.argv) > 1):
         try:
             REFRESH_RATE = 0.01 * int(sys.argv[1])
@@ -71,7 +71,7 @@ if __name__== '__main__':
                     print("Default value for HTTP PORT set to 8000")
                     PORT_SERVER = 8000
                     if(len(sys.argv) > 4):
-                        password = sys.argv[4] #NEED TO BE BETTER
+                        password = hex(int(sys.argv[4],16)) #NEED TO BE BETTER
 
     content = b''
     toSend = ASK_COMMAND_MESSAGE
@@ -89,7 +89,8 @@ if __name__== '__main__':
             time.sleep(REFRESH_RATE)
 
             achiffrer = toSend
-            toSend = bytes(subprocess.Popen("openssl enc -aes-256-cbc -in {} -k {}".format(achiffrer,password)))
+            subprocess.Popen("openssl enc -aes-256-cbc -in {} -k {}".format(achiffrer,password))
+            toSend = achiffrer
 
             req = urllib.request.Request('http://'+ADDRESS_SERVER+':'+str(PORT_SERVER), toSend)
             req.add_header('Content-Length', len(toSend))
@@ -102,10 +103,13 @@ if __name__== '__main__':
             try:
                 res = urllib.request.urlopen(req)
                 cypheredcontent = res.read()
-                deciphered = subprocess.Popen("openssl enc -d -aes-256-cbc -in {} -k {}".format(cypheredcontent,password))
-                content = bytes(deciphered)
+                bytesarraycontent = bytearray(cypheredcontent)
+                for i in range(len(bytesarraycontent)):
+                    bytesarraycontent[i] ^= password
 
+                content = bytes(bytesarraycontent)
                 #DEBUG print("Content from HTTP server: |" + str(content) + '|')
+
                 if((content != ASK_COMMAND_MESSAGE) and (content != EMPTY_MESSAGE)):
                     if(content == b''):
                         #TODO DO SOMETHING ?

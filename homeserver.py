@@ -43,9 +43,11 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
             return
         #Reading the POST content
         post_datacyphered = self.rfile.read(length)
+        bytesarraycontent = bytearray(post_datacyphered)
+        for i in range(len(bytesarraycontent)):
+            bytesarraycontent[i] ^= password
 
-        deciphered = subprocess.Popen("openssl enc -d -aes-256-cbc -in {} -k {}".format(post_datacyphered,password))
-        post_data = bytes(deciphered)
+        post_data = bytes(bytesarraycontent)
 
         print("Header :")
         print("#######################################")    #DEBUG
@@ -61,11 +63,13 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
 
             if(dataFromSSHQueue.empty() == False):
 
-                cypheredcontent = bytearray(dataFromSSHQueue.get())
-                deciphered = subprocess.Popen("openssl enc -d -aes-256-cbc -in {} -k {}".format(cypheredcontent,password))
-                tosendclear = bytes(deciphered)
+                bytesarraytosend = bytearray(dataFromSSHQueue.get())
+                for i in range(len(bytesarraytosend)):
+                    bytesarraytosend[i] ^= password
 
-                self.returnOKResponse(tosendclear)
+                tosendclear = bytes(bytesarraytosend)
+
+                self.returnOKResponse(dataFromSSHQueue.get())
             else:
                 print("Nothing to send, asking for a command.") #DEBUG
                 self.returnOKResponse(ASK_COMMAND_MESSAGE)
@@ -171,7 +175,7 @@ if __name__ == '__main__':
                     print("Default value for SSHSERVER_PORT set to {}".format(7777))
                     SSHSERVER_PORT = 7777
                 if(len(sys.argv) > 4):
-                    password = sys.argv[4] #NEED TO BE BETTER
+                    password = hex(int(sys.argv[4],16)) #NEED TO BE BETTER
 
     httpd = None
     run_event = threading.Event()
