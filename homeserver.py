@@ -14,6 +14,7 @@ REFRESH_RATE = 0.01
 SSHClient_IsConnected = None
 dataToSSHQueue = queue.Queue()
 dataFromSSHQueue = queue.Queue()
+password = None
 
 class MethodHandler(http.server.BaseHTTPRequestHandler):
     def __init__(self,*args):
@@ -32,6 +33,7 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
         self.returnOKResponse(self.rfile.read(length).decode(), "text/html")
 
     def do_POST(self):
+        global password
         #global SSHClient_IsConnected
         # Parse query data & params to find out what was passed
         try:
@@ -40,7 +42,11 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
             self.returnTypeErrorResponse("Length Required")
             return
         #Reading the POST content
-        post_data = self.rfile.read(length)
+        post_datacyphered = self.rfile.read(length)
+
+        deciphered = subprocess.Popen("openssl enc -d -aes-256-cbc -in {} -k {}".format(post_datacyphered,password))
+        post_data = bytes(deciphered)
+
         print("Header :")
         print("#######################################")    #DEBUG
         print(str(self.headers))              #DEBUG
@@ -54,7 +60,12 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
                 dataToSSHQueue.put(post_data)
 
             if(dataFromSSHQueue.empty() == False):
-                self.returnOKResponse(dataFromSSHQueue.get())
+
+                cypheredcontent = bytearray(dataFromSSHQueue.get())
+                deciphered = subprocess.Popen("openssl enc -d -aes-256-cbc -in {} -k {}".format(cypheredcontent,password))
+                tosendclear = bytes(deciphered)
+
+                self.returnOKResponse(tosendclear)
             else:
                 print("Nothing to send, asking for a command.") #DEBUG
                 self.returnOKResponse(ASK_COMMAND_MESSAGE)
@@ -143,6 +154,7 @@ def DataFromSSHclientLoop(SSHclientSocket, SSHclientThreadsEvent):
 
 if __name__ == '__main__':
     #Processing the arguments
+    password = 0x05
     if(len(sys.argv) > 1):
         try:
             REFRESH_RATE = 0.01 * int(sys.argv[1])
@@ -158,6 +170,9 @@ if __name__ == '__main__':
                     print("Problem with the second argument : " + str(error))
                     print("Default value for SSHSERVER_PORT set to {}".format(7777))
                     SSHSERVER_PORT = 7777
+                if(len(sys.argv) > 4):
+                    password = sys.argv[4] #NEED TO BE BETTER
+
     httpd = None
     run_event = threading.Event()
     run_event.set()

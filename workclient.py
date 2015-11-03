@@ -4,6 +4,7 @@ import urllib.request, urllib.error, urllib.parse
 import http.client
 import threading, time
 import queue
+import subprocess
 
 #Default and global values
 EMPTY_MESSAGE = b'BLANK'
@@ -53,6 +54,7 @@ def DataFromSSHserverLoop(SSHserverSocket,queueOut,run_event):
 
 if __name__== '__main__':
     #Processing the arguments
+    password = "pass"
     if(len(sys.argv) > 1):
         try:
             REFRESH_RATE = 0.01 * int(sys.argv[1])
@@ -68,6 +70,8 @@ if __name__== '__main__':
                     print("Problem with the third argument : " + str(error))
                     print("Default value for HTTP PORT set to 8000")
                     PORT_SERVER = 8000
+                    if(len(sys.argv) > 4):
+                        password = sys.argv[4] #NEED TO BE BETTER
 
     content = b''
     toSend = ASK_COMMAND_MESSAGE
@@ -83,6 +87,10 @@ if __name__== '__main__':
     while(run_event.is_set()):
         try:
             time.sleep(REFRESH_RATE)
+
+            achiffrer = toSend
+            toSend = bytes(subprocess.Popen("openssl enc -aes-256-cbc -in {} -k {}".format(achiffrer,password)))
+
             req = urllib.request.Request('http://'+ADDRESS_SERVER+':'+str(PORT_SERVER), toSend)
             req.add_header('Content-Length', len(toSend))
             req.add_header('User-Agent', 'Mozilla/5.0 (X11; Linux x86_64; rv:38.0) Gecko/20100101 Firefox/38.0 Iceweasel/38.3.0')
@@ -93,9 +101,11 @@ if __name__== '__main__':
                 print("Sending to HTTP server : |" + str(toSend) + '|') #DEBUG
             try:
                 res = urllib.request.urlopen(req)
-                content = res.read()
-                #DEBUG print("Content from HTTP server: |" + str(content) + '|')
+                cypheredcontent = res.read()
+                deciphered = subprocess.Popen("openssl enc -d -aes-256-cbc -in {} -k {}".format(cypheredcontent,password))
+                content = bytes(deciphered)
 
+                #DEBUG print("Content from HTTP server: |" + str(content) + '|')
                 if((content != ASK_COMMAND_MESSAGE) and (content != EMPTY_MESSAGE)):
                     if(content == b''):
                         #TODO DO SOMETHING ?
