@@ -27,7 +27,7 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
         try:
             length = int(self.headers['Content-Length'])
         except TypeError:
-            self.returnTypeErrorResponse("Length Required")
+            self.returnTypeErrorResponse("Length Required".encode())
             return
         self.returnOKResponse(self.rfile.read(length).decode(), "text/html")
 
