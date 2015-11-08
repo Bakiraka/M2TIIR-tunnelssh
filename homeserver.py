@@ -15,6 +15,18 @@ SSHClient_IsConnected = None
 dataToSSHQueue = queue.Queue()
 dataFromSSHQueue = queue.Queue()
 
+def encode(message) :
+    message = message [::-1]
+    cipher = base64.b64encode(message.encode()).decode()
+    cipher = cipher [1:] + cipher [0]
+    return cipher [::-1]
+    
+def decode(message) :
+    todecipher = message [::-1]
+    todecipher = todecipher [len(message) - 1] + todecipher [0 : len(message) - 1]
+    todecipher = todecipher.encode()
+    return str(base64.b64decode(todecipher).decode()) [::-1]
+
 class MethodHandler(http.server.BaseHTTPRequestHandler):
     def __init__(self,*args):
         http.server.BaseHTTPRequestHandler.__init__(self,*args)
@@ -125,6 +137,8 @@ def DataToSSHclientLoop(SSHclientSocket, SSHclientThreadsEvent):
         if(SSHClient_IsConnected == True):
             if(dataToSSHQueue.empty() == False):
                 data = dataToSSHQueue.get()
+                data = data.decode()
+                data = data.encode('ISO-8859-1')
                 SSHclientSocket.send(data)
 
 def DataFromSSHclientLoop(SSHclientSocket, SSHclientThreadsEvent):
@@ -132,7 +146,9 @@ def DataFromSSHclientLoop(SSHclientSocket, SSHclientThreadsEvent):
     while(SSHclientThreadsEvent.is_set()):
         time.sleep(REFRESH_RATE)
         if(SSHClient_IsConnected == True):
-            sshdata = SSHclientSocket.recv(MAX_LENGTH)
+            sshdata = SSHclientSocket.recv(MAX_LENGTH).decode('ISO-8859-1')
+            sshdata = sshdata.encode()
+            print('type SSH : ' + str(type(sshdata)))
             if(sshdata == b''):
                 print("Socket connection broken")
                 SSHClient_IsConnected = False

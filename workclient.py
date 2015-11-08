@@ -15,6 +15,18 @@ ADDRESS_SERVER = "localhost"
 PORT_SERVER = 8000
 REFRESH_RATE = 0.01
 
+def encode(message) :
+    message = message [::-1]
+    cipher = base64.b64encode(message.encode()).decode()
+    cipher = cipher [1:] + cipher [0]
+    return cipher [::-1]
+    
+def decode(message) :
+    todecipher = message [::-1]
+    todecipher = todecipher [len(message) - 1] + todecipher [0 : len(message) - 1]
+    todecipher = todecipher.encode()
+    return str(base64.b64decode(todecipher).decode()) [::-1]
+
 def threadCommunicationSSH(queueIn, queueOut, run_event):
     sock = socket.socket()
     try:
@@ -38,7 +50,8 @@ def DataToSSHserverLoop(SSHserverSocket,queueIn,run_event):
         time.sleep(REFRESH_RATE * 10)
         if(queueIn.empty() == False):
             if(tmp == None):
-                tmp = queueIn.get()
+                tmp = queueIn.get().decode()
+                tmp = tmp.encode('ISO-8859-1')
                 SSHserverSocket.send(tmp)
             tmp = None
 
@@ -47,6 +60,9 @@ def DataFromSSHserverLoop(SSHserverSocket,queueOut,run_event):
     while(run_event.is_set()):
         time.sleep(REFRESH_RATE * 10)
         toReceive = SSHserverSocket.recv(MAX_LENGTH)
+        toReceive = toReceive.decode('ISO-8859-1')
+        toReceive = toReceive.encode()
+        
         if(toReceive != None):
             queueOut.put(toReceive)
         toReceive = None
