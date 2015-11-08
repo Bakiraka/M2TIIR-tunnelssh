@@ -13,6 +13,8 @@ PORT_SSHD = 22
 MAX_LENGTH = 2048
 ADDRESS_SSHD = "localhost"
 ADDRESS_SERVER = "localhost"
+EMPREINTE_SERVER = 'SERVER4269'
+EMPREINTE_CLIENT = "CLIENT4269"
 PORT_SERVER = 8000
 REFRESH_RATE = 0.01
 
@@ -87,7 +89,7 @@ if __name__== '__main__':
                     PORT_SERVER = 8000
 
     content = b''
-    toSend = encrypt(ASK_COMMAND_MESSAGE.decode()).encode()
+    toSend = encrypt(EMPREINTE_CLIENT + ASK_COMMAND_MESSAGE.decode()).encode()
     #Thread synchronisation element
     run_event = threading.Event()
     run_event.set()
@@ -106,12 +108,19 @@ if __name__== '__main__':
             req.add_header('Content-Type', 'application/octet-stream')
 
             #DEBUG print("Openning : " + req.get_full_url())
-            if((toSend != ASK_COMMAND_MESSAGE) and (toSend != EMPTY_MESSAGE) and content != b''): #DEBUG
-                print("Sending to HTTP server : |" + str(toSend) + '|') #DEBUG
+            #if((toSend != ASK_COMMAND_MESSAGE) and (toSend != EMPTY_MESSAGE) and content != b''): #DEBUG
+            #    print("Sending to HTTP server : |" + str(toSend) + '|') #DEBUG
             try:
                 res = urllib.request.urlopen(req)
                 content = res.read()
-                content = decrypt(content.decode()).encode()
+                content = decrypt(content.decode())
+                if(not(content.startswith(EMPREINTE_SERVER))):
+                    continue
+                else :
+                    content = content.replace(EMPREINTE_SERVER,'')
+                    content = content.encode()
+                    
+                
                 #DEBUG print("Content from HTTP server: |" + str(content) + '|')
 
                 if((content != ASK_COMMAND_MESSAGE) and (content != EMPTY_MESSAGE)):
@@ -140,7 +149,7 @@ if __name__== '__main__':
                 toSend = ASK_COMMAND_MESSAGE
             else:
                 toSend = qo.get()
-            toSend = encrypt(toSend.decode()).encode()
+            toSend = encrypt(EMPREINTE_CLIENT+toSend.decode()).encode()
 
         except KeyboardInterrupt:
             print("<Ctrl-C> Received, ending program.")

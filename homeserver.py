@@ -7,6 +7,8 @@ import base64
 #Default Values
 EMPTY_MESSAGE = b'BLANK'
 ASK_COMMAND_MESSAGE = b'WAITING_FOR_COMMAND'
+EMPREINTE_SERVER = 'SERVER4269'
+EMPREINTE_CLIENT = "CLIENT4269"
 MAX_LENGTH = 2048
 HTTP_PORT = 8000
 SSHSERVER_PORT = 7777
@@ -42,7 +44,7 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
             self.returnTypeErrorResponse("Length Required".encode())
             return
         message = self.rfile.read(length)
-        message = encrypt(message.decode()).encode()
+        message = encrypt(EMPREINTE_SERVER+message.decode()).encode()
         self.returnOKResponse(message, "text/html")
 
     def do_POST(self):
@@ -55,14 +57,20 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
             return
         #Reading the POST content
         post_data = self.rfile.read(length)
-        post_data = decrypt(post_data.decode()).encode()
-        print("Header :")
-        print("#######################################")    #DEBUG
-        print(str(self.headers))              #DEBUG
-        print("#######################################")    #DEBUG
-        print("Received from POST: |" + str(post_data) + "|")    #DEBUG
+        post_data = decrypt(post_data.decode())
+        #print("Header :")
+        #print("#######################################")    #DEBUG
+        #print(str(self.headers))              #DEBUG
+        #print("#######################################")    #DEBUG
+        #print("Received from POST: |" + str(post_data) + "|")    #DEBUG
         message = ''
         if(SSHClient_IsConnected):
+            if(not(post_data.startswith(EMPREINTE_CLIENT))):
+                self.returnTypeErrorResponse("Bad Request")
+                return
+            else :
+                post_data = post_data.replace(EMPREINTE_CLIENT,'')
+                post_data = post_data.encode()
             if(post_data == ASK_COMMAND_MESSAGE):
                 print("### Received an ASK_COMMAND_MESSAGE ###") #DEBUG
             else:
@@ -75,7 +83,7 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
                 message = ASK_COMMAND_MESSAGE
         else:
             message = EMPTY_MESSAGE
-        message = encrypt(message.decode()).encode()
+        message = encrypt(EMPREINTE_SERVER + message.decode()).encode()
         self.returnOKResponse(message)
         return
 
