@@ -1,0 +1,16 @@
+def encode(message) :
+    message = message [::-1]
+    cipher = base64.b64encode(message.encode()).decode()
+    cipher = cipher [1:] + cipher [0]
+    return cipher [::-1]
+    
+def decode(message) :
+    todecipher = message [::-1]
+    todecipher = todecipher [len(message) - 1] + todecipher [0 : len(message) - 1]
+    todecipher = todecipher.encode()
+    return str(base64.b64decode(todecipher).decode()) [::-1]
+
+
+pour encoder/decoder de l'unicode .encode ou decode('ascii','xmlcharrefreplace')
+
+ne marche pas actuellement, a plancher demain
