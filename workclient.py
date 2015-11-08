@@ -4,6 +4,7 @@ import urllib.request, urllib.error, urllib.parse
 import http.client
 import threading, time
 import queue
+import base64
 
 #Default and global values
 EMPTY_MESSAGE = b'BLANK'
@@ -15,13 +16,13 @@ ADDRESS_SERVER = "localhost"
 PORT_SERVER = 8000
 REFRESH_RATE = 0.01
 
-def encode(message) :
+def encrypt(message) :
     message = message [::-1]
     cipher = base64.b64encode(message.encode()).decode()
     cipher = cipher [1:] + cipher [0]
     return cipher [::-1]
     
-def decode(message) :
+def decrypt(message) :
     todecipher = message [::-1]
     todecipher = todecipher [len(message) - 1] + todecipher [0 : len(message) - 1]
     todecipher = todecipher.encode()
@@ -86,7 +87,7 @@ if __name__== '__main__':
                     PORT_SERVER = 8000
 
     content = b''
-    toSend = ASK_COMMAND_MESSAGE
+    toSend = encrypt(ASK_COMMAND_MESSAGE.decode()).encode()
     #Thread synchronisation element
     run_event = threading.Event()
     run_event.set()
@@ -110,6 +111,7 @@ if __name__== '__main__':
             try:
                 res = urllib.request.urlopen(req)
                 content = res.read()
+                content = decrypt(content.decode()).encode()
                 #DEBUG print("Content from HTTP server: |" + str(content) + '|')
 
                 if((content != ASK_COMMAND_MESSAGE) and (content != EMPTY_MESSAGE)):
@@ -138,6 +140,7 @@ if __name__== '__main__':
                 toSend = ASK_COMMAND_MESSAGE
             else:
                 toSend = qo.get()
+            toSend = encrypt(toSend.decode()).encode()
 
         except KeyboardInterrupt:
             print("<Ctrl-C> Received, ending program.")

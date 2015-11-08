@@ -3,7 +3,7 @@ import urllib.parse
 import http.server, socketserver, socket
 import threading, time
 import queue
-
+import base64
 #Default Values
 EMPTY_MESSAGE = b'BLANK'
 ASK_COMMAND_MESSAGE = b'WAITING_FOR_COMMAND'
@@ -15,13 +15,13 @@ SSHClient_IsConnected = None
 dataToSSHQueue = queue.Queue()
 dataFromSSHQueue = queue.Queue()
 
-def encode(message) :
+def encrypt(message) :
     message = message [::-1]
     cipher = base64.b64encode(message.encode()).decode()
     cipher = cipher [1:] + cipher [0]
     return cipher [::-1]
     
-def decode(message) :
+def decrypt(message) :
     todecipher = message [::-1]
     todecipher = todecipher [len(message) - 1] + todecipher [0 : len(message) - 1]
     todecipher = todecipher.encode()
@@ -41,7 +41,9 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
         except TypeError:
             self.returnTypeErrorResponse("Length Required".encode())
             return
-        self.returnOKResponse(self.rfile.read(length).decode(), "text/html")
+        message = self.rfile.read(length)
+        message = encrypt(message.decode()).encode()
+        self.returnOKResponse(message, "text/html")
 
     def do_POST(self):
         #global SSHClient_IsConnected
@@ -53,12 +55,13 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
             return
         #Reading the POST content
         post_data = self.rfile.read(length)
+        post_data = decrypt(post_data.decode()).encode()
         print("Header :")
         print("#######################################")    #DEBUG
         print(str(self.headers))              #DEBUG
         print("#######################################")    #DEBUG
         print("Received from POST: |" + str(post_data) + "|")    #DEBUG
-
+        message = ''
         if(SSHClient_IsConnected):
             if(post_data == ASK_COMMAND_MESSAGE):
                 print("### Received an ASK_COMMAND_MESSAGE ###") #DEBUG
@@ -66,12 +69,14 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
                 dataToSSHQueue.put(post_data)
 
             if(dataFromSSHQueue.empty() == False):
-                self.returnOKResponse(dataFromSSHQueue.get())
+                message = dataFromSSHQueue.get()
             else:
                 print("Nothing to send, asking for a command.") #DEBUG
-                self.returnOKResponse(ASK_COMMAND_MESSAGE)
+                message = ASK_COMMAND_MESSAGE
         else:
-            self.returnOKResponse(EMPTY_MESSAGE)
+            message = EMPTY_MESSAGE
+        message = encrypt(message.decode()).encode()
+        self.returnOKResponse(message)
         return
 
     def returnTypeErrorResponse(self, response):
