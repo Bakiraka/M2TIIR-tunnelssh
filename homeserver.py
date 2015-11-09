@@ -16,7 +16,7 @@ REFRESH_RATE = 0.01
 SSHClient_IsConnected = None
 dataToSSHQueue = queue.Queue()
 dataFromSSHQueue = queue.Queue()
-dictionnary = []
+dictionnary = {}
 def encrypt(message) :
     message = message [::-1]
     cipher = base64.b64encode(message.encode()).decode()
