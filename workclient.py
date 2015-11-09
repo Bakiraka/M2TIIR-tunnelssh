@@ -5,6 +5,8 @@ import http.client
 import threading, time
 import queue
 import base64
+import random
+import os
 
 #Default and global values
 EMPTY_MESSAGE = b'BLANK'
@@ -71,6 +73,7 @@ def DataFromSSHserverLoop(SSHserverSocket,queueOut,run_event):
         toReceive = None
 
 if __name__== '__main__':
+    random.seed(os.urandom(10))
     #Processing the arguments
     if(len(sys.argv) > 1):
         try:
@@ -102,7 +105,8 @@ if __name__== '__main__':
     while(run_event.is_set()):
         try:
             time.sleep(REFRESH_RATE)
-            req = urllib.request.Request('http://'+ADDRESS_SERVER+':'+str(PORT_SERVER), toSend)
+            req = urllib.request.Request('http://'+ADDRESS_SERVER+':'+str(PORT_SERVER)+'/'+str(random.randint(0, pow(2,48))), toSend)
+            
             req.add_header('Content-Length', len(toSend))
             req.add_header('User-Agent', 'Mozilla/5.0 (X11; Linux x86_64; rv:38.0) Gecko/20100101 Firefox/38.0 Iceweasel/38.3.0')
             req.add_header('Content-Type', 'application/octet-stream')
