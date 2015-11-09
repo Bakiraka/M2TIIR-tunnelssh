@@ -16,7 +16,7 @@ REFRESH_RATE = 0.01
 SSHClient_IsConnected = None
 dataToSSHQueue = queue.Queue()
 dataFromSSHQueue = queue.Queue()
-
+dictionnary = []
 def encrypt(message) :
     message = message [::-1]
     cipher = base64.b64encode(message.encode()).decode()
@@ -55,14 +55,18 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
         except TypeError:
             self.returnTypeErrorResponse("Length Required")
             return
+        print("path : " + self.path)
+        if dictionnary [self.path] != None :
+             self.returnOKResponse(message)
+             return 
         #Reading the POST content
         post_data = self.rfile.read(length)
         post_data = decrypt(post_data.decode())
-        #print("Header :")
-        #print("#######################################")    #DEBUG
-        #print(str(self.headers))              #DEBUG
-        #print("#######################################")    #DEBUG
-        #print("Received from POST: |" + str(post_data) + "|")    #DEBUG
+        print("Header :")
+        print("#######################################")    #DEBUG
+        print(str(self.headers))              #DEBUG
+        print("#######################################")    #DEBUG
+        print("Received from POST: |" + str(post_data) + "|")    #DEBUG
         message = ''
         if(SSHClient_IsConnected):
             if(not(post_data.startswith(EMPREINTE_CLIENT))):
@@ -84,6 +88,7 @@ class MethodHandler(http.server.BaseHTTPRequestHandler):
         else:
             message = EMPTY_MESSAGE
         message = encrypt(EMPREINTE_SERVER + message.decode()).encode()
+        dictionnary [self.path] = message 
         self.returnOKResponse(message)
         return
 
